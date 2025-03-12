@@ -130,7 +130,6 @@ if(USM_HOST_ALLOCATIONS_ENABLED)
     message(STATUS "USM_HOST_ALLOCATIONS_ENABLED set manually!")
 endif()
 
-set(NUM_ENGINES 1) # fixed to 1
 message(STATUS "NUM_ENGINES=${NUM_ENGINES}")
 message(STATUS "NUM_REORDER=${NUM_REORDER}")
 

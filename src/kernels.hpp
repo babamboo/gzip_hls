@@ -2,10 +2,6 @@
 #define __KERNELS_H__
 #pragma once
 
-//#ifndef NUM_ENGINES
-  #define NUM_ENGINES 1
-//#endif
-
 // BATCH_SIZE is the number of input files the kernel should be capable of
 // compressing per invocation of the GZIP engine. This is a compile time
 // constant so that hardware is built to support this number. To ensure maximum
@@ -19,8 +15,6 @@
 #else
   constexpr int BATCH_SIZE = 12;
 #endif
-
-constexpr int kNumEngines = NUM_ENGINES;
 
 constexpr int kCRCIndex = 0;
 constexpr int kLZReductionIndex = 1;

@@ -704,11 +704,9 @@ bool HufEnc(char *len, short *dist, unsigned char *data, unsigned int *outdata,
   return write;
 }
 
-//template <int engineID>
+
 class CRC;
-//template <int engineID>
 class LZReduction;
-//template <int engineID>
 class StaticHuffman;
 
 typedef struct infile_ch {
@@ -731,7 +729,7 @@ class GzipOutStream;
 
 // StreamingBeat struct enables sideband signals in Avalon streaming interface
 using StreamingBeatT1 = sycl::ext::intel::experimental::StreamingBeat<
-    infile_ch,  // type carried over this Avalon streaming interface's data
+    infile_ch,      // type carried over this Avalon streaming interface's data
                     // signal
     true,           // enable startofpacket and endofpacket signals
     false>;         // disable the empty signal
@@ -744,10 +742,9 @@ using PipePropertiesT1 = decltype(sycl::ext::oneapi::experimental::properties(
     sycl::ext::intel::experimental::protocol_avalon_streaming_uses_ready));
 
 using StreamingBeatT2 = sycl::ext::intel::experimental::StreamingBeat<
-    tLzInput,  // type carried over this Avalon streaming interface's data
-                    // signal
-    true,           // enable startofpacket and endofpacket signals
-    false>;         // disable the empty signal
+    tLzInput,
+    true,  
+    false>;
 using PipePropertiesT2 = decltype(sycl::ext::oneapi::experimental::properties(
     sycl::ext::intel::experimental::ready_latency<0>,
     sycl::ext::intel::experimental::bits_per_symbol<kVec*8>,
@@ -756,10 +753,9 @@ using PipePropertiesT2 = decltype(sycl::ext::oneapi::experimental::properties(
     sycl::ext::intel::experimental::protocol_avalon_streaming_uses_ready));
 
 using StreamingBeatT3 = sycl::ext::intel::experimental::StreamingBeat<
-    tHuffOutput,  // type carried over this Avalon streaming interface's data
-                    // signal
-    true,           // enable startofpacket and endofpacket signals
-    false>;         // disable the empty signal
+    tHuffOutput,
+    true,       
+    false>;     
 using PipePropertiesT3 = decltype(sycl::ext::oneapi::experimental::properties(
     sycl::ext::intel::experimental::ready_latency<0>,
     sycl::ext::intel::experimental::bits_per_symbol<kVec*sizeof(unsigned int)*8>,
@@ -777,71 +773,51 @@ using PipePropertiesT = decltype(sycl::ext::oneapi::experimental::properties(
 
 // Image streams
 using CRCInPipe = sycl::ext::intel::experimental::pipe<
-    CRCInStream,        // An identifier for the pipe
+    CRCInStream,      // An identifier for the pipe
     StreamingBeatT1,  // The type of data in the pipe
-    0,               // The capacity of the pipe
+    0,                // The capacity of the pipe
     PipePropertiesT1  // Customizable pipe properties
     >;
 using CRCOutPipe = sycl::ext::intel::experimental::pipe<
-    CRCOutStream,       // An identifier for the pipe
-    unsigned int,    // The type of data in the pipe
-    0,               // The capacity of the pipe
-    PipePropertiesT  // Customizable pipe properties
+    CRCOutStream,   
+    unsigned int,   
+    0,              
+    PipePropertiesT 
     >;
 using LZInPipe = sycl::ext::intel::experimental::pipe<
-    LZInStream,        // An identifier for the pipe
-    StreamingBeatT2,  // The type of data in the pipe
-    0,               // The capacity of the pipe
-    PipePropertiesT2  // Customizable pipe properties
+    LZInStream,     
+    StreamingBeatT2,
+    0,              
+    PipePropertiesT2
     >;
 using HuffOutPipe = sycl::ext::intel::experimental::pipe<
-    HuffOutStream,        // An identifier for the pipe
-    StreamingBeatT3,  // The type of data in the pipe
-    0,               // The capacity of the pipe
-    PipePropertiesT3  // Customizable pipe properties
+    HuffOutStream,  
+    StreamingBeatT3,
+    0,              
+    PipePropertiesT3
     >;
 using GzipOutPipe = sycl::ext::intel::experimental::pipe<
-    GzipOutStream,        // An identifier for the pipe
-    size_t,  // The type of data in the pipe
-    0,               // The capacity of the pipe
-    PipePropertiesT  // Customizable pipe properties
+    GzipOutStream,  
+    size_t, 
+    0,              
+    PipePropertiesT 
     >;
 
-//using acc_dist_channel = ext::intel::pipe<class some_pipe, struct DistLen>;
-//using acc_dist_channel_last = ext::intel::pipe<class some_pipe2, struct DistLen>;
-
-class some_pipe;
-class some_pipe2;
-
-class some_pipe3;
+class acc_dist_channel_pipe;
+class acc_dist_channel_last_pipe;
 
 using PipeProps = decltype(sycl::ext::oneapi::experimental::properties(
     sycl::ext::intel::experimental::ready_latency<0>));
 
 using acc_dist_channel = sycl::ext::intel::experimental::pipe<
-  some_pipe,
+  acc_dist_channel_pipe,
   struct DistLen,
   0,
   PipeProps
   >;
 using acc_dist_channel_last = sycl::ext::intel::experimental::pipe<
-  some_pipe2,
+  acc_dist_channel_last_pipe,
   struct DistLen,
-  0,
-  PipeProps
-  >;
-
-
-struct test_pipe_s {
-  //  unsigned char data[kVecX2];
-  unsigned char data[32];
-};
-using test_pipe = sycl::ext::intel::experimental::pipe<
-  some_pipe3,
-  //  struct DistLen,
-  //  struct test_pipe_s,
-  //  tHuffOutput,
-  unsigned int,
   0,
   PipeProps
   >;
@@ -851,6 +827,8 @@ struct LZRKernel {
     unsigned int, decltype(sycl::ext::oneapi::experimental::properties{
 	sycl::ext::intel::experimental::conduit})>
   isz;
+
+  [[intel::kernel_args_restrict]]  // NO-FORMAT: Attribute
   void operator ()() const {
     //-------------------------------------
     //   Hash Table(s)
@@ -1177,6 +1155,8 @@ struct SHuffKernel {
     unsigned char, decltype(sycl::ext::oneapi::experimental::properties{
 	sycl::ext::intel::experimental::conduit})>
   eof;
+
+  [[intel::kernel_args_restrict]]  // NO-FORMAT: Attribute
   void operator ()() const {
     unsigned int leftover[kVec] = {0};
     Unroller<0, kVec>::step([&](int i) { leftover[i] = 0; });
@@ -1241,6 +1221,8 @@ struct SHuffKernel {
 
   
 struct CRCKernel {
+
+  [[intel::kernel_args_restrict]]  // NO-FORMAT: Attribute
   void operator ()() const {
     const unsigned int table64[64][16] = {
 					  {
@@ -2496,13 +2478,6 @@ struct CRCKernel {
 };
 
 
-// void SubmitGzipTasksSingleEngine(
-//     queue &q,
-//     size_t block_size,  // size of block to compress.
-//     buffer<char, 1> *pibuf, buffer<char, 1> *pobuf,
-//     buffer<struct GzipOutInfo, 1> *gzip_out_buf,
-//     buffer<unsigned, 1> *result_crc, bool last_block, std::vector<event> &e_crc, std::vector<event> &e_lz,
-//     std::vector<event> &e_huff, int buffer_index) {
 void SubmitGzipTasksSingleEngine(
     queue &q,
     size_t block_size,  // size of block to compress.
@@ -2511,20 +2486,6 @@ void SubmitGzipTasksSingleEngine(
     unsigned *result_crc, bool last_block, std::vector<event> &e_crc, std::vector<event> &e_lz,
     std::vector<event> &e_huff, int buffer_index) {
 
-  //  using acc_dist_channel = ext::intel::pipe<class some_pipe, struct DistLen>;
-  //  using acc_dist_channel_last = ext::intel::pipe<class some_pipe2, struct DistLen>;
-  /*  const int num_nibbles_parallel = 64;
-  for (int i = 0; i < block_size / (num_nibbles_parallel / 2); i++) {
-    bool start_of_packet = (i == 0);
-    bool end_of_packet = (i == (block_size / (num_nibbles_parallel / 2) - 1));
-    infile_ch a;
-    for(int j = 0; j < num_nibbles_parallel/2; j++)
-      a.d[j] = pibuf[i * num_nibbles_parallel/2 + j];
-
-    StreamingBeatT1 in_beat(a, start_of_packet, end_of_packet);
-    CRCInPipe::write(q, in_beat);
-    }*/
-  //  int to = (block_size + 32 - 1) / 32;
   int to = block_size / 32;
   for (int i = 0; i < to; i++) {
     bool start_of_packet = (i == 0);
@@ -2536,6 +2497,7 @@ void SubmitGzipTasksSingleEngine(
     StreamingBeatT1 in_beat(a, start_of_packet, end_of_packet);
     CRCInPipe::write(q, in_beat);
   }
+
   q.single_task<CRC>(CRCKernel{});
   
   result_crc[0] = CRCOutPipe::read(q);
@@ -2551,27 +2513,10 @@ void SubmitGzipTasksSingleEngine(
     StreamingBeatT2 in_beat(a, start_of_packet, end_of_packet);
     LZInPipe::write(q, in_beat);
   }
-  
-  //  q.single_task<LZReduction<engineID>>(LZRKernel{block_size});
-  //  q.single_task<StaticHuffman<engineID>>(SHuffKernel{block_size, last_block ? 1 : 0});
 
   q.single_task<LZReduction>(LZRKernel{block_size});
   q.single_task<StaticHuffman>(SHuffKernel{block_size, last_block ? 1 : 0});
-  /*
-      while(1) {
-	//	tHuffOutput a = test_pipe::read(q);
-    //	for(int i = 0; i < kVec; i++){
-	//	  printf("%02x", a.d[i]);
-	  unsigned int a = test_pipe::read(q);
-	  printf("%08x\n", a);
-	  //	}
-	  //	printf("\n");
-      }
 
-  unsigned int a = test_pipe::read(q);
-  printf("test:%08x\n", a);
-  */
-  //  int ctr = (block_size / kVec) + 2;
   int odx = 0;
   StreamingBeatT3 in_beat;
   do {
@@ -2580,460 +2525,20 @@ void SubmitGzipTasksSingleEngine(
       pobuf[odx + i] =in_beat.data.d[i];
     }
     odx += (sizeof(unsigned int) << kVecPow);
-    //  } while (ctr--);
   } while (!in_beat.eop);
   
   gzip_out_buf[0].compression_sz = GzipOutPipe::read(q);
 
-
-  /*  
-  e_crc[buffer_index] = q.submit([&](handler &h) {
-    auto accessor_isz = block_size;
-    auto acc_pibuf = pibuf->get_access<access::mode::read>(h);
-    auto accresult_crc = result_crc->get_access<access::mode::discard_write>(h);
-    h.single_task<CRC<engineID>>([=]() [[intel::kernel_args_restrict]] {
-
-      const int num_nibbles_parallel = 64;
-
-      const int num_sections = accessor_isz / (num_nibbles_parallel /
-                                               2);  // how many loop iterations
-      unsigned int result = ~0;
-
-      for (int i = 0; i < num_sections; i++) {
-        unsigned int result_update_odd = 0;
-        unsigned int result_update_even = 0;
-// which 4 bit chunk within the section -- this loop can be unrolled, the
-// total update for the crc is the xor of the updates from the nibbles
-        #pragma unroll
-        for (int nib = 0; nib < num_nibbles_parallel; nib++) {
-          unsigned char this_input_nibble =
-              (acc_pibuf[(i * num_nibbles_parallel + nib) / 2] >>
-               (4 * (nib % 2)));
-          unsigned char this_result_nibble =
-              (nib < 8) ? (result >> (4 * nib)) : 0;
-          unsigned char this_table_index =
-              this_input_nibble ^ this_result_nibble;
-          if (nib % 2) {
-            result_update_odd ^= table64[nib][this_table_index & 0xf];
-          } else {
-            result_update_even ^= table64[nib][this_table_index & 0xf];
-          }
-        }
-        result = result_update_odd ^ result_update_even;
-      }
-
-      accresult_crc[0] = ~result;
-    });
-  });
-
-  
-  e_lz[buffer_index] = q.submit([&](handler &h) {
-    auto accessor_isz = block_size;
-    auto acc_pibuf = pibuf->get_access<access::mode::read>(h);
-
-    h.single_task<LZReduction<engineID>>([=]() [[intel::kernel_args_restrict]] {
-      //-------------------------------------
-      //   Hash Table(s)
-      //-------------------------------------
-
-      [[intel::singlepump]] [[intel::numbanks(kVec)]] [
-          [intel::max_replicates(kVec)]] struct {
-        unsigned char s[kLen];
-      } dictionary[kDepth][kVec];
-
-      [[intel::singlepump]] [[intel::numbanks(kVec)]] [
-          [intel::max_replicates(
-              kVec)]] unsigned int dict_offset[kDepth][kVec];
-
-      // Initialize history to empty.
-      for (int i = 0; i < kDepth; i++) {
-        Unroller<0, kVec>::step([&](int k) { dict_offset[i][k] = 0; });
-      }
-
-      // This is the window of data on which we look for matches
-      // We fetch twice our data size because we have kVec offsets
-      unsigned char current_window[kVecX2];
-
-      // This is the window of data on which we look for matches
-      // We fetch twice our data size because we have kVec offsets
-      unsigned char compare_window[kLen][kVec][kVec];
-      // kVec bytes per dict----------|    |   |
-      // kVec dictionaries-----------------|   |
-      // one for each curr win offset---------|
-
-      // load offset into these arrays
-      unsigned int compare_offset[kVec][kVec];
-      // one per kVec bytes----------|     |
-      // one for each compwin-------------|
-
-      // Initialize input stream position
-      unsigned int inpos_minus_vec_div_16 = 0;
-
-      // this is ceiling of (insize-kVec)/16, original comparison was
-      // inpos < insize, now inpos is carried as (inpos-kVec)/16 so this is what
-      // we compare to
-      unsigned int insize_compare = (accessor_isz) / kVec;
-
-      int ctr = insize_compare - 1;
-
-      char first_valid_pos = 0;
-
-      struct DistLen dist_offs_data;
-
-      size_t inpos = 0;
-
-      // load in new data
-      struct LzInput in;
-      Unroller<0, kVec>::step([&](int i) { in.data[i] = acc_pibuf[inpos++]; });
-      Unroller<0, kVec>::step([&](int i) {
-        current_window[i + kVec] = in.data[i];
-      });
-
-      do {
-        //-----------------------------
-        // Prepare current window
-        //-----------------------------
-
-        // shift current window
-        Unroller<0, kVec>::step(
-            [&](int i) { current_window[i] = current_window[i + kVec]; });
-
-        // load in new data
-        Unroller<0, kVec>::step(
-            [&](int i) { in.data[i] = acc_pibuf[inpos++]; });
-
-        Unroller<0, kVec>::step(
-            [&](int i) { current_window[kVec + i] = in.data[i]; });
-
-        //-----------------------------
-        // Compute hash
-        //-----------------------------
-
-        unsigned short hash[kVec];
-
-        Unroller<0, kVec>::step([&](int i) {
-          hash[i] = (current_window[i] ^ (current_window[i + 1] << 6) ^
-                     (current_window[i + 2] << 2) ^ current_window[i + 3]) &
-                    kHashMask;
-        });
-
-        //-----------------------------
-        // Dictionary look-up
-        //-----------------------------
-
-        // loop over kVec compare windows, each has a different hash
-        Unroller<0, kVec>::step([&](int i) {
-          // loop over all kVec bytes
-          Unroller<0, kLen>::step([&](int j) {
-            Unroller<0, kVec>::step([&](int k) {
-              compare_window[k][j][i] = dictionary[hash[i]][j].s[k];
-            });
-          });
-        });
-
-        // loop over compare windows
-        Unroller<0, kVec>::step([&](int i) {
-          Unroller<0, kLen>::step([&](int j) {
-            // loop over frames in this compare window
-            // (they come from different dictionaries)
-            compare_offset[j][i] = dict_offset[hash[i]][j];
-          });
-        });
-
-        //-----------------------------
-        // Dictionary update
-        //-----------------------------
-
-        // loop over different dictionaries to store different frames
-        // store one frame per dictionary
-        // loop over kVec bytes to store
-        Unroller<0, kLen>::step([&](int i) {
-          Unroller<0, kVec>::step([&](int j) {
-            // store actual bytes
-            dictionary[hash[i]][i].s[j] = current_window[i + j];
-          });
-        });
-
-        Unroller<0, kVec>::step([&](int i) {
-          // loop over kVec different dictionaries and write one word to each
-          dict_offset[hash[i]][i] =
-              (inpos_minus_vec_div_16 << 4) |
-              i;  // inpos - kVec + 0, we know that inpos - kVec has 0 as the 4
-                  // lower bits so really just concatenate
-        });
-
-        //-----------------------------
-        // Match search
-        //-----------------------------
-
-        // arrays to store length, best length etc..
-        unsigned char length[kVec];
-        bool done[kVec];
-        char best_length[kVec];
-        unsigned int best_offset[kVec];
-
-        // initialize best_length
-        Unroller<0, kVec>::step([&](int i) {
-          best_length[i] = 0;
-          best_offset[i] = 0;
-        });
-
-        // loop over each comparison window frame
-        // one comes from each dictionary
-        Unroller<0, kVec>::step([&](int i) {
-          // initialize length and done
-          Unroller<0, kVec>::step([&](int l) {
-            length[l] = 0;
-            done[l] = 0;
-          });
-
-          // loop over each current window
-          Unroller<0, kVec>::step([&](int j) {
-            // loop over each char in the current window
-            // and corresponding char in comparison window
-            Unroller<0, kLen>::step([&](int k) {
-              bool comp =
-                  current_window[k + j] == compare_window[k][i][j] && !done[j];
-              length[j] += comp;
-              done[j] = !comp;
-            });
-          });
-
-          // Check if this the best length
-          Unroller<0, kVec>::step([&](int m) {
-            bool update_best =
-                (length[m] > best_length[m]) && (compare_offset[i][m] != 0) &&
-                (((inpos_minus_vec_div_16 << kVecPow) | (i & (kVec - 1))) -
-                     (compare_offset[i][m]) <
-                 kMaxDistance);
-
-            unsigned int new_offset =
-                (((inpos_minus_vec_div_16 << kVecPow) | (m & (kVec - 1))) &
-                 0x7ffff) -
-                ((compare_offset[i][m] & 0x7ffff));
-
-            // Reconsider if new_offset is bigger than current offset, might
-            // take more bytes to encode
-            update_best = update_best && (length[m] == best_length[m]) &&
-                                  (new_offset > best_offset[m])
-                              ? false
-                              : update_best;
-
-            best_offset[m] = (update_best ? new_offset : best_offset[m]) &
-                             0x7ffff;  // 19 bits is sufficient
-
-            best_length[m] = (update_best ? length[m] : best_length[m]) &
-                             0x1f;  // 5 bits is sufficient
-          });
-        });
-
-        //-----------------------------
-        // Filter matches step 1
-        //-----------------------------
-
-        // remove matches with offsets that are <= 0: this means they're
-        // self-matching or didn't match and keep only the matches that, when
-        // encoded, take fewer bytes than the actual match length
-        Unroller<0, kVec>::step([&](int i) {
-          best_length[i] = (((best_length[i] & 0x1f) >= 3) &&
-                                    ((best_offset[i]) < kMaxDistance)
-                                ? best_length[i]
-                                : 0) &
-                           0x1f;  // 5 bits is sufficient
-
-          // Second level filter - remove matches with len 3, greater than
-          // kTooFar
-          best_length[i] =
-              (((best_length[i] & 0x1f) == 3) && ((best_offset[i]) > kTooFar)
-                   ? 0
-                   : best_length[i]) &
-              0x1f;  // 5 bits is sufficient
-                     // don't emmit matches for last iteration as some of the
-                     // second part of the window might be undefined
-          if (ctr == 0) best_length[i] = 0;
-        });
-
-        //-----------------------------
-        // Assign first_valid_pos
-        //-----------------------------
-
-        // first_valid_pos is loop-carried, and tricky to compute.  So first
-        // compute it speculatively in parallel for every possible value of the
-        // previous first_valid_pos.
-        char first_valid_pos_speculative[kVec];
-
-        Unroller<0, kVec>::step([&](int guess) {
-          unsigned char next_match_search = guess;
-          Unroller<0, kVec>::step([&](int i) {
-            unsigned int len = best_length[i];
-
-            // Skip to the next match
-            next_match_search =
-                i >= next_match_search && len > 0 ? i + len : next_match_search;
-          });
-
-          first_valid_pos_speculative[guess] =
-              next_match_search - kVec > 0 ? next_match_search - kVec : 0;
-        });
-
-        // For kVec=16 (the largest currently supported), this should be a 16:1
-        // mux, which is 2 6LUTs deep.  For larger kVec, it will be worse.
-        unsigned char current_valid_pos = first_valid_pos;
-        first_valid_pos =
-            first_valid_pos_speculative[first_valid_pos & (kVec - 1)] &
-            (kVec -
-             1);  // first_valid_pos only needs 4 bits, make this explicit
-
-        // greedy match selection
-        Unroller<0, (kVec)>::step([&](int i) {
-          unsigned int len = best_length[i];
-          best_length[i] = i < current_valid_pos ? -1 : best_length[i];
-          // Skip to the next match
-          current_valid_pos =
-              i >= current_valid_pos && len > 0 ? i + len : current_valid_pos;
-        });
-
-        //-----------------------------
-        // Setup LZ dist/len pairs to push to Huffman encode kernel
-        //-----------------------------
-
-        Unroller<0, kVec>::step([&](int i) {
-          dist_offs_data.data[i] = 0;
-          dist_offs_data.len[i] = -1;
-          dist_offs_data.dist[i] = -1;
-          if (best_length[i] >= 0) {
-            dist_offs_data.data[i] = current_window[i];
-            dist_offs_data.len[i] = best_length[i];
-            dist_offs_data.dist[i] = best_offset[i];
-          }
-        });
-
-        acc_dist_channel::write(dist_offs_data);
-
-        // increment input position
-        inpos_minus_vec_div_16++;
-        ctr--;
-
-      } while (ctr >= 0);
-
-      const char lasti = accessor_isz - (accessor_isz & ~(kVec - 1));
-      const char firstpos = first_valid_pos;
-      Unroller<0, kVec>::step([&](unsigned char i) {
-        dist_offs_data.data[i] = 0;
-        dist_offs_data.len[i] = -1;
-        dist_offs_data.dist[i] = -1;
-      });
-
-      Unroller<0, kVec>::step([&](unsigned char i) {
-        bool pred =
-            ((i - firstpos) < (lasti - firstpos)) && ((i - firstpos) >= 0);
-        dist_offs_data.data[i] = pred ? current_window[i + kVec] : 0;
-        dist_offs_data.len[i] = pred ? 0 : -1;
-      });
-
-      acc_dist_channel_last::write(dist_offs_data);
-    });
-  });
-
-  e_huff[buffer_index] = q.submit([&](handler &h) {
-    auto accessor_isz = block_size;
-    auto acc_gzip_out =
-        gzip_out_buf->get_access<access::mode::discard_write>(h);
-    auto accessor_output = pobuf->get_access<access::mode::discard_write>(h);
-    auto acc_eof = last_block ? 1 : 0;
-    h.single_task<StaticHuffman<engineID>>([=
-    ]() [[intel::kernel_args_restrict]] {
-      unsigned int leftover[kVec] = {0};
-      Unroller<0, kVec>::step([&](int i) { leftover[i] = 0; });
-
-      unsigned short leftover_size = 0;
-
-      unsigned int outpos_huffman = 0;
-
-      int ctr = ((accessor_isz) / kVec) + 2;
-      int odx = 0;
-
-      // Add the gzip start block marker. Assumes static huffman trees.
-      leftover_size = 3;
-      leftover[0] = ((kStaticTrees << 1) + (acc_eof));
-
-      do {
-        struct DistLen in;
-        // init the input structure for the gzip end block marker.
-        // this is the very last data block to be encoded and written.
-        Unroller<0, kVec>::step([&](int i) {
-          in.len[i] = -1;
-          in.dist[i] = -1;
-          in.data[i] = 0;
-        });
-        in.len[0] = ctr == 1 ? -3 : -1;
-        in.data[0] = 0;
-
-        in = ctr > 2 ? acc_dist_channel::read()
-                     : (ctr == 2 ? acc_dist_channel_last::read() : in);
-
-        struct HuffmanOutput outdata;
-        outdata.write = HufEnc(in.len, in.dist, in.data, outdata.data, leftover,
-                               &leftover_size);
-
-        // prevent out of bounds write
-        if (((ctr == 0) || outdata.write) && (odx < accessor_isz)) {
-          Unroller<0, kVec * sizeof(unsigned int)>::step([&](int i) {
-            accessor_output[odx + i] =
-                (ctr == 0) ? (unsigned char)(leftover[(i >> 2) & 0xf] >>
-                                             ((i & 3) << 3))
-                           : (unsigned char)(outdata.data[(i >> 2) & 0xf] >>
-                                             ((i & 3) << 3));
-          });
-        }
-
-        outpos_huffman = outdata.write ? outpos_huffman + 1 : outpos_huffman;
-        odx += outdata.write ? (sizeof(unsigned int) << kVecPow) : 0;
-
-      } while (ctr--);
-
-      // Store summary values from lz and huffman
-      acc_gzip_out[0].compression_sz =
-          (outpos_huffman * sizeof(unsigned int) * kVec) +
-          (leftover_size + 7) / 8;
-    });
-  });
-*/
 }
 
-// void SubmitGzipTasks(queue &q,
-//                      size_t block_size,  // size of block to compress.
-//                      buffer<char, 1> *pibuf, buffer<char, 1> *pobuf,
-//                      buffer<struct GzipOutInfo, 1> *gzip_out_buf,
-//                      buffer<unsigned, 1> *result_crc, bool last_block,
-//                      std::vector<event> &e_crc, std::vector<event> &e_lz, std::vector<event> &e_huff,
-//                      size_t engineID, int buffer_index) {
 void SubmitGzipTasks(queue &q,
                      size_t block_size,  // size of block to compress.
                      char *pibuf, char *pobuf,
                      struct GzipOutInfo *gzip_out_buf,
                      unsigned *result_crc, bool last_block,
                      std::vector<event> &e_crc, std::vector<event> &e_lz, std::vector<event> &e_huff,
-		     //                     size_t engineID, int buffer_index) {
                      int buffer_index) {
-  // Statically declare the engines so that the hardware is created for them.
-  // But at run time, the host can dynamically select which engine(s) to use via
-  // engineID.
-  // if (engineID == 0) {
-  //   SubmitGzipTasksSingleEngine<0>(q, block_size, pibuf, pobuf, gzip_out_buf,
-  //                                  result_crc, last_block, e_crc, e_lz, e_huff, buffer_index);
-  // }
-
-  // #if NUM_ENGINES > 1
-  //   if (engineID == 1) {
-  //     SubmitGzipTasksSingleEngine<1>(q, block_size, pibuf, pobuf, gzip_out_buf,
-  //                                    result_crc, last_block, e_crc, e_lz, e_huff, buffer_index);
-  //   }
-  // #endif
 
     SubmitGzipTasksSingleEngine(q, block_size, pibuf, pobuf, gzip_out_buf,
                                    result_crc, last_block, e_crc, e_lz, e_huff, buffer_index);
-    
-  // If this reference design is to be expanded to > 2 engines, declare them here.
-
 }

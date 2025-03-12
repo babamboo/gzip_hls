@@ -21,7 +21,7 @@ constexpr int minimum_filesize = kVec + 1;
 
 bool help = false;
 
-int CompressFile(queue &q, std::string &input_file, std::vector<std::string> outfilenames,
+int CompressFile(queue &q, std::string &input_file, std::string &outfilename,
                  int iterations, bool report);
 
 void Help(void) {
@@ -85,8 +85,7 @@ size_t SyclGetExecTimeNs(event e) {
 
 int main(int argc, char *argv[]) {
   std::string infilename = "";
-
-  std::vector<std::string> outfilenames (kNumEngines);
+  std::string outfilename;
 
   char str_buffer[kMaxStringLen] = {0};
 
@@ -147,30 +146,25 @@ int main(int argc, char *argv[]) {
     // next, check valid and acceptable parameter ranges.
     // if output filename not set, use the default
     // name, else use the name specified by the user
-    outfilenames[0] = std::string(infilename) + ".gz";
+    outfilename = std::string(infilename) + ".gz";
     if (strlen(str_buffer)) {
-      outfilenames[0] = std::string(str_buffer);
-    }
-    for (size_t i=1; i< kNumEngines; i++) {
-      // Filenames will be of the form outfilename, outfilename2, outfilename3 etc.
-      outfilenames[i] = outfilenames[0] + std::to_string(i+1);
+      outfilename = std::string(str_buffer);
     }
 
-    std::cout << "Launching High-Bandwidth DMA GZIP application with " << kNumEngines
-              << " engines\n";
+    std::cout << "Launching High-Bandwidth DMA GZIP application";
 
 #ifdef FPGA_EMULATOR
-    CompressFile(q, infilename, outfilenames, 1, true);
+    CompressFile(q, infilename, outfilename, 1, true);
 #elif FPGA_SIMULATOR
-    CompressFile(q, infilename, outfilenames, 2, true);
+    CompressFile(q, infilename, outfilename, 2, true);
 #else
     // warmup run - use this run to warmup accelerator. There are some steps in
     // the runtime that are only executed on the first kernel invocation but not
     // on subsequent invocations. So execute all that stuff here before we
     // measure performance (in the next call to CompressFile().
-    CompressFile(q, infilename, outfilenames, 1, false);
+    CompressFile(q, infilename, outfilename, 1, false);
     // profile performance
-    CompressFile(q, infilename, outfilenames, 200, true);
+    CompressFile(q, infilename, outfilename, 200, true);
 #endif
   } catch (sycl::exception const &e) {
     // Catches exceptions in the host code
@@ -196,25 +190,16 @@ struct KernelInfo {
   unsigned *current_crc;
   char *pobuf;
   char *pibuf;
-  // buffer<struct GzipOutInfo, 1> *gzip_out_buf;
-  // buffer<unsigned, 1> *current_crc;
-  // buffer<char, 1> *pobuf;
-  // buffer<char, 1> *pibuf;
-  char *pobuf_decompress;
 
-  //  uint32_t buffer_crc[kMinBufferSize];
   uint32_t refcrc;
 
-  //  const char *pref_buffer;
-  //  char *poutput_buffer;
   size_t file_size;
-  //  struct GzipOutInfo out_info[kMinBufferSize];
   int iteration;
   bool last_block;
 };
 
 // returns 0 on success, otherwise a non-zero failure code.
-int CompressFile(queue &q, std::string &input_file, std::vector<std::string> outfilenames,
+int CompressFile(queue &q, std::string &input_file, std::string &outfilename,
                  int iterations, bool report) {
   size_t isz;
   char *pinbuf;
@@ -267,194 +252,98 @@ int CompressFile(queue &q, std::string &input_file, std::vector<std::string> out
   // Create an array of kernel info structures and create buffers for kernel
   // input/output. The buffers are re-used between iterations, but enough 
   // disjoint buffers are created to support double-buffering.
-  struct KernelInfo *kinfo[kNumEngines];
-  for (size_t eng = 0; eng < kNumEngines; eng++) {
-    kinfo[eng] =
-        (struct KernelInfo *)malloc(sizeof(struct KernelInfo) * buffers_count);
-    if (kinfo[eng] == NULL) {
-      std::cout << "Cannot allocate kernel info buffer.\n";
-      return 1;
-    }
-    for (int i = 0; i < buffers_count; i++) {
-      kinfo[eng][i].file_size = isz;
-      // Allocating slightly larger buffers (+ 16 * kVec) to account for
-      // granularity of kernel writes
-      int outputSize =
-          ((isz + kInOutPadding) < kMinBufferSize) ? kMinBufferSize
-                                                   : (isz + kInOutPadding);
-      //      const size_t input_alloc_size = isz + kInOutPadding;
-
-      // Pre-pin buffer using malloc_host() to improve DMA bandwidth.
-      // if (i >= 3) {
-      //   kinfo[eng][i].poutput_buffer = kinfo[eng][i - 3].poutput_buffer;
-      // } else {
-      //   if (prepin) {
-      //     kinfo[eng][i].poutput_buffer =
-      //         (char *)malloc_host(outputSize, q.get_context());
-      //   } else {
-      //     kinfo[eng][i].poutput_buffer = (char *)malloc(outputSize);
-      //   }
-
-      //   std::cout << "outputSize: " << outputSize << " Prepin: "
-      //           << prepin << "\n";
-      //   std::cout << "kMinBufferSize: " << kMinBufferSize << " isz: " << isz 
-      //           << " kInOutPadding: " << kInOutPadding << "\n";
-      //   if (kinfo[eng][i].poutput_buffer == NULL) {
-      //     std::cout << "Cannot allocate output buffer.\n";
-      //     free(kinfo[eng]);
-      //     return 1;
-      //   }
-      //   // zero pages to fully allocate them
-      //   memset(kinfo[eng][i].poutput_buffer, 0, outputSize);
-      // }
-
-      kinfo[eng][i].last_block = true;
-      kinfo[eng][i].iteration = i;
-      //      kinfo[eng][i].pref_buffer = pinbuf;
-
-      kinfo[eng][i].gzip_out_buf =
-          i >= 3 ? kinfo[eng][i - 3].gzip_out_buf
-	//                 : new buffer<struct GzipOutInfo, 1>(kMinBufferSize);
-                 : new struct GzipOutInfo[kMinBufferSize];
-      kinfo[eng][i].current_crc = i >= 3
-                                      ? kinfo[eng][i - 3].current_crc
-	//                                      : new buffer<unsigned, 1>(kMinBufferSize);
-                                      : new unsigned[kMinBufferSize];
-      kinfo[eng][i].pibuf = i >= 3
-                                ? kinfo[eng][i - 3].pibuf
-	//                                : new buffer<char, 1>(input_alloc_size);
-                                : pinbuf;
-      kinfo[eng][i].pobuf =
-          i >= 3 ? kinfo[eng][i - 3].pobuf :
-	//	new buffer<char, 1>(outputSize);
-	new char[outputSize];
-      kinfo[eng][i].pobuf_decompress = (char *)malloc(kinfo[eng][i].file_size);
-    }
+  struct KernelInfo *kinfo;
+  kinfo = (struct KernelInfo *)malloc(sizeof(struct KernelInfo) * buffers_count);
+  if (kinfo == NULL) {
+    std::cout << "Cannot allocate kernel info buffer.\n";
+    return 1;
   }
+  for (int i = 0; i < buffers_count; i++) {
+    kinfo[i].file_size = isz;
+    // Allocating slightly larger buffers (+ 16 * kVec) to account for
+    // granularity of kernel writes
+    int outputSize =
+      ((isz + kInOutPadding) < kMinBufferSize) ? kMinBufferSize
+      : (isz + kInOutPadding);
+    kinfo[i].last_block = true;
+    kinfo[i].iteration = i;
+
+    kinfo[i].gzip_out_buf =
+      i >= 3 ? kinfo[i - 3].gzip_out_buf
+      : new struct GzipOutInfo[kMinBufferSize];
+    kinfo[i].current_crc = i >= 3
+      ? kinfo[i - 3].current_crc
+      : new unsigned[kMinBufferSize];
+    kinfo[i].pibuf = i >= 3
+      ? kinfo[i - 3].pibuf
+      : pinbuf;
+    kinfo[i].pobuf =
+      i >= 3 ? kinfo[i - 3].pobuf
+      : new char[outputSize];
+  }
+
 
   // Create events for the various parts of the execution so that we can profile
   // their performance.
-  std::vector<event> e_input_dma     [kNumEngines]; // Input to the GZIP engine. This is a transfer from host to device.
-  std::vector<event> e_output_dma    [kNumEngines]; // Output from the GZIP engine. This is transfer from device to host.
-  std::vector<event> e_crc_dma       [kNumEngines]; // Transfer CRC from device to host
-  std::vector<event> e_size_dma      [kNumEngines]; // Transfer compressed file size from device to host
-  std::vector<event> e_k_crc         [kNumEngines]; // CRC kernel
-  std::vector<event> e_k_lz          [kNumEngines]; // LZ77 kernel
-  std::vector<event> e_k_huff        [kNumEngines]; // Huffman Encoding kernel
+  std::vector<event> e_input_dma ; // Input to the GZIP engine. This is a transfer from host to device.
+  std::vector<event> e_output_dma; // Output from the GZIP engine. This is transfer from device to host.
+  std::vector<event> e_crc_dma   ; // Transfer CRC from device to host
+  std::vector<event> e_size_dma  ; // Transfer compressed file size from device to host
+  std::vector<event> e_k_crc     ; // CRC kernel
+  std::vector<event> e_k_lz      ; // LZ77 kernel
+  std::vector<event> e_k_huff    ; // Huffman Encoding kernel
 
-  for (int i = 0; i < kNumEngines; i++) {
-    e_input_dma[i].resize(buffers_count);
-    e_output_dma[i].resize(buffers_count);
-    e_crc_dma[i].resize(buffers_count);
-    e_size_dma[i].resize(buffers_count);
-    e_k_crc[i].resize(buffers_count);
-    e_k_lz[i].resize(buffers_count);
-    e_k_huff[i].resize(buffers_count);
-  }
+  e_input_dma.resize(buffers_count);
+  e_output_dma.resize(buffers_count);
+  e_crc_dma.resize(buffers_count);
+  e_size_dma.resize(buffers_count);
+  e_k_crc.resize(buffers_count);
+  e_k_lz.resize(buffers_count);
+  e_k_huff.resize(buffers_count);
 
 
-#ifdef FPGA_EMULATOR
-#elif FPGA_SIMULATOR
-#else
-  auto start = std::chrono::steady_clock::now();
-#endif
-
-  
   /*************************************************/
   /* Main loop where the actual execution happens  */
   /*************************************************/
   for (int i = 0; i < buffers_count; i++) {
-    for (size_t eng = 0; eng < kNumEngines; eng++) {
-      // Transfer the input data, to be compressed, from host to device.
-      // e_input_dma[eng][i] = q.submit([&](handler &h) {
-      //   auto in_data =
-      //       kinfo[eng][i].pibuf->get_access<access::mode::discard_write>(h);
-      //   h.copy(kinfo[eng][i].pref_buffer, in_data);
-      // });
-      
 
-      /************************************/
-      /************************************/
-      /*         LAUNCH GZIP ENGINE       */
-      /************************************/
-      /************************************/
-      SubmitGzipTasks(q, kinfo[eng][i].file_size, kinfo[eng][i].pibuf,
-                      kinfo[eng][i].pobuf, kinfo[eng][i].gzip_out_buf,
-                      kinfo[eng][i].current_crc, kinfo[eng][i].last_block,
-                      e_k_crc[eng], e_k_lz[eng], e_k_huff[eng],
-		      //		      eng, i);
-		      i);
-
-      // Transfer the output (compressed) data from device to host.
-      // e_output_dma[eng][i] = q.submit([&](handler &h) {
-      //   auto out_data = kinfo[eng][i].pobuf->get_access<access::mode::read>(h);
-      //   h.copy(out_data, kinfo[eng][i].poutput_buffer);
-      // });
-
-      // Transfer the file size of the compressed output file from device to host.
-      // e_size_dma[eng][i] = q.submit([&](handler &h) {
-      //   auto out_data =
-      //       kinfo[eng][i].gzip_out_buf->get_access<access::mode::read>(h);
-      //   h.copy(out_data, kinfo[eng][i].out_info);
-      // });
-
-      // Transfer the CRC of the compressed output file from device to host.
-      // e_crc_dma[eng][i] = q.submit([&](handler &h) {
-      //   auto out_data =
-      //       kinfo[eng][i].current_crc->get_access<access::mode::read>(h);
-      //   h.copy(out_data, kinfo[eng][i].buffer_crc);
-      // });
-    }
+    /************************************/
+    /************************************/
+    /*         LAUNCH GZIP ENGINE       */
+    /************************************/
+    /************************************/
+    SubmitGzipTasks(q, kinfo[i].file_size, kinfo[i].pibuf,
+		    kinfo[i].pobuf, kinfo[i].gzip_out_buf,
+		    kinfo[i].current_crc, kinfo[i].last_block,
+		    e_k_crc, e_k_lz, e_k_huff,
+		    i);
   }
-  /*
-  // Wait for all kernels to complete
-  for (int eng = 0; eng < kNumEngines; eng++) {
-    for (int i = 0; i < buffers_count; i++) {
-      e_output_dma[eng][i].wait();
-      e_size_dma[eng][i].wait();
-      e_crc_dma[eng][i].wait();
-    }
-  }
-  */
-// Stop the timer.
-#ifdef FPGA_EMULATOR
-#elif FPGA_SIMULATOR
-#else
-  auto end = std::chrono::steady_clock::now();
-  double diff_total = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
-  double gbps = iterations * isz / (double)diff_total / 1000000000.0;
-#endif
+
 
   // Check the compressed file size from each iteration. Make sure the size is actually
   // less-than-or-equal to the input size. Also calculate the remaining CRC.
-  size_t compressed_sz[kNumEngines];
-  for (int eng = 0; eng < kNumEngines; eng++) {
-    compressed_sz[eng] = 0;
-    for (int i = 0; i < buffers_count; i++) {
-//    if (kinfo[eng][i].out_info[0].compression_sz > kinfo[eng][i].file_size) {
-      if (kinfo[eng][i].gzip_out_buf[0].compression_sz > kinfo[eng][i].file_size) {
-        std::cerr << "Unsupported: compressed file larger than input file( "
-	  //                  << kinfo[eng][i].out_info[0].compression_sz << " )\n";
-                  << kinfo[eng][i].gzip_out_buf[0].compression_sz << " )\n";
-        return 1;
-      }
-      // The majority of the CRC is calculated by the CRC kernel on the FPGA. But the kernel
-      // operates on quantized chunks of input data, so any remaining input data, that falls
-      // outside the quanta, is included in the overall CRC calculation via the following 
-      // function that runs on the host. The last argument is the running CRC that was computed
-      // on the FPGA.
-      //      kinfo[eng][i].buffer_crc[0] =
-      kinfo[eng][i].current_crc[0] =
-	//          Crc32(kinfo[eng][i].pref_buffer, kinfo[eng][i].file_size,
-          Crc32(kinfo[eng][i].pibuf, kinfo[eng][i].file_size,
-                kinfo[eng][i].current_crc[0]);
-      //                kinfo[eng][i].buffer_crc[0]);
-      // Accumulate the compressed size across all iterations. Used to 
-      // compute compression ratio later.
-      //      compressed_sz[eng] += kinfo[eng][i].out_info[0].compression_sz;
-      compressed_sz[eng] += kinfo[eng][i].gzip_out_buf[0].compression_sz;
+  size_t compressed_sz;
+
+  compressed_sz = 0;
+  for (int i = 0; i < buffers_count; i++) {
+    if (kinfo[i].gzip_out_buf[0].compression_sz > kinfo[i].file_size) {
+      std::cerr << "Unsupported: compressed file larger than input file( "
+		<< kinfo[i].gzip_out_buf[0].compression_sz << " )\n";
+      return 1;
     }
+    // The majority of the CRC is calculated by the CRC kernel on the FPGA. But the kernel
+    // operates on quantized chunks of input data, so any remaining input data, that falls
+    // outside the quanta, is included in the overall CRC calculation via the following 
+    // function that runs on the host. The last argument is the running CRC that was computed
+    // on the FPGA.
+    kinfo[i].current_crc[0] =
+      Crc32(kinfo[i].pibuf, kinfo[i].file_size,
+	    kinfo[i].current_crc[0]);
+    // Accumulate the compressed size across all iterations. Used to 
+    // compute compression ratio later.
+    compressed_sz += kinfo[i].gzip_out_buf[0].compression_sz;
   }
+
 
   // delete the file mapping now that all kernels are complete, and we've
   // snapped the time delta
@@ -465,22 +354,16 @@ int CompressFile(queue &q, std::string &input_file, std::vector<std::string> out
   }
 
   // Write the output compressed data from the first iteration of each engine, to a file.
-  for (int eng = 0; eng < kNumEngines; eng++) {
-    // WriteBlockGzip() returns 1 on failure
-    //    if (report && WriteBlockGzip(input_file, outfilenames[eng], kinfo[eng][0].poutput_buffer,
-    //                        kinfo[eng][0].out_info[0].compression_sz,
-    //                        kinfo[eng][0].file_size, kinfo[eng][0].buffer_crc[0])) {
-    if (report && WriteBlockGzip(input_file, outfilenames[eng], kinfo[eng][0].pobuf,
-                        kinfo[eng][0].gzip_out_buf[0].compression_sz,
-                        kinfo[eng][0].file_size, kinfo[eng][0].current_crc[0])) {
-      std::cout << "FAILED\n";
-      return 1;
-    }        
-  }
+  if (report && WriteBlockGzip(input_file, outfilename, kinfo[0].pobuf,
+			       kinfo[0].gzip_out_buf[0].compression_sz,
+			       kinfo[0].file_size, kinfo[0].current_crc[0])) {
+    std::cout << "FAILED\n";
+    return 1;
+  }        
 
   // Decompress the output from engine-0 and compare against the input file. Only engine-0's
   // output is verified since all engines are fed the same input data.
-  if (report && CompareGzipFiles(input_file, outfilenames[0])) {
+  if (report && CompareGzipFiles(input_file, outfilename)) {
     std::cout << "FAILED\n";
     return 1;
   }
@@ -488,75 +371,52 @@ int CompressFile(queue &q, std::string &input_file, std::vector<std::string> out
   /*
   // Generate throughput report
   // First gather all the execution times.
-  size_t time_k_crc[kNumEngines];
-  size_t time_k_lz[kNumEngines];
-  size_t time_k_huff[kNumEngines];
-  size_t time_input_dma[kNumEngines];
-  size_t time_output_dma[kNumEngines];
-  for (int eng = 0; eng < kNumEngines; eng++) {
-printf("check1_0\n");
-    time_k_crc[eng] = 0;
-    time_k_lz[eng] = 0;
-    time_k_huff[eng] = 0;
-    time_input_dma[eng] = 0;
-    time_output_dma[eng] = 0;
+  size_t time_k_crc;
+  size_t time_k_lz;
+  size_t time_k_huff;
+  size_t time_input_dma;
+  size_t time_output_dma;
+
+    time_k_crc = 0;
+    time_k_lz = 0;
+    time_k_huff = 0;
+    time_input_dma = 0;
+    time_output_dma = 0;
     for (int i = 0; i < buffers_count; i++) {
-printf("check1_1\n");
-//      e_k_crc[eng][i].wait();
-//      e_k_lz[eng][i].wait();
-//      e_k_huff[eng][i].wait();
-      time_k_crc[eng]       += SyclGetExecTimeNs(e_k_crc[eng][i]);
-      time_k_lz[eng]        += SyclGetExecTimeNs(e_k_lz[eng][i]);
-      time_k_huff[eng]      += SyclGetExecTimeNs(e_k_huff[eng][i]);
-      time_input_dma[eng]   += SyclGetExecTimeNs(e_input_dma[eng][i]);
-      time_output_dma[eng]  += SyclGetExecTimeNs(e_output_dma[eng][i]);
+      time_k_crc       += SyclGetExecTimeNs(e_k_crc[i]);
+      time_k_lz        += SyclGetExecTimeNs(e_k_lz[i]);
+      time_k_huff      += SyclGetExecTimeNs(e_k_huff[i]);
+      time_input_dma   += SyclGetExecTimeNs(e_input_dma[i]);
+      time_output_dma  += SyclGetExecTimeNs(e_output_dma[i]);
     }
-  }
+
   */
   if (report) {
     double compression_ratio =
-        (double)((double)compressed_sz[0] / (double)isz / iterations);
+        (double)((double)compressed_sz / (double)isz / iterations);
     /*
 #ifdef FPGA_EMULATOR
 #elif FPGA_SIMULATOR
 #else
-    std::cout << "Throughput: " << kNumEngines * gbps << " GB/s\n\n";
-    for (int eng = 0; eng < kNumEngines; eng++) {
+    std::cout << "Throughput: " << gbps << " GB/s\n\n";
       std::cout << "TP breakdown for engine #" << eng << " (GB/s)\n";
-      std::cout << "CRC = " << iterations * isz / (double)time_k_crc[eng]
+      std::cout << "CRC = " << iterations * isz / (double)time_k_crc
                 << "\n";
-      std::cout << "LZ77 = " << iterations * isz / (double)time_k_lz[eng]
+      std::cout << "LZ77 = " << iterations * isz / (double)time_k_lz
                 << "\n";
       std::cout << "Huffman Encoding = "
-                << iterations * isz / (double)time_k_huff[eng] << "\n";
+                << iterations * isz / (double)time_k_huff << "\n";
       std::cout << "DMA host-to-device = "
-                << iterations * isz / (double)time_input_dma[eng] << "\n";
+                << iterations * isz / (double)time_input_dma << "\n";
       std::cout << "DMA device-to-host = "
-                << iterations * isz / (double)time_output_dma[eng] << "\n\n";
-    }
+                << iterations * isz / (double)time_output_dma << "\n\n";
 #endif
     */
     std::cout << "Compression Ratio " << compression_ratio * 100 << "%\n";
   }
 
   // Cleanup anything that was allocated by this routine.
-  for (int eng = 0; eng < kNumEngines; eng++) {
-    for (int i = 0; i < buffers_count; i++) {
-      // if (i < 3) {
-      //   delete kinfo[eng][i].gzip_out_buf;
-      //   delete kinfo[eng][i].current_crc;
-      //   delete kinfo[eng][i].pibuf;
-      //   delete kinfo[eng][i].pobuf;
-      //   if (prepin) {
-      //     free(kinfo[eng][i].poutput_buffer, q.get_context());
-      //   } else {
-      //     free(kinfo[eng][i].poutput_buffer);
-      //   }
-      // }
-      free(kinfo[eng][i].pobuf_decompress);
-    }
-    free(kinfo[eng]);
-  }
+  free(kinfo);
 
   if (report) std::cout << "PASSED\n";
   return 0;
